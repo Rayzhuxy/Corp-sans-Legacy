@@ -21,10 +21,5 @@ export default defineNoteConfig({
         "STL 与泛型编程.md",
       ],
     },
-    {
-      text: "C++面向对象高级开发",
-      prefix: "oop1",
-      items: ["面向对象高级开发1.md"],
-    },
   ],
 });

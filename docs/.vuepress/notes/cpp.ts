@@ -27,5 +27,10 @@ export default defineNoteConfig({
         "5-STL常用算法.md",
       ],
     },
+    {
+      text: "C++面向对象高级开发",
+      prefix: "oop",
+      items: ["面向对象高级开发1.md", "面向对象高级开发2.md"],
+    },
   ],
 });
