@@ -29,7 +29,7 @@ C++高效编程守则是状况而变化，取决于你使用 C++的哪个部分�
 
 ### 02: 尽量以 const, enum, inline 替换#define
 
-```c++
+```cpp
 #define ASPECT RATIO 1.653
 ```
 
@@ -37,7 +37,7 @@ C++高效编程守则是状况而变化，取决于你使用 C++的哪个部分�
 
 有一个值得注意的是 ==class 专属常量==。为了将常量的作用域限制于 class 内，你必须让它成为 class 的一个成员(member) ;而为确保此常量至多只有一份实体，你必须让它成为一个 static 成员:
 
-```c++
+```cpp
 class GamePlayer {
 private:
     static const int NumTurns = 5;   //常量声明式
@@ -48,7 +48,7 @@ private:
 
 然而你所看到的是 NumTurns 的`声明式`而非`定义式`。通常 C++要求你对你所使用的任何东西提供一个定义式，但如果它是个 class 专属常量又是 static 且为整数类型(integral type,例如 ints, chars, bools)，则需特殊处理。只要不取它们的地址,你可以声明并使用它们而无须提供定义式。但如果你取某个 class 专属常量的地址,或纵使你不取其地址而你的编译器却（不正确地）坚持要看到一个定义式，你就必须另外提供定义式如下:
 
-```c++
+```cpp
 const int GamePlayer : : NumTurns;  //NumTurns的定义;
                                     //下面告诉你为什么没有给予数值
 ```
