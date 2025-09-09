@@ -39,10 +39,10 @@ permalink: /HouJie/6vgcgakl/
 
 ### 定义关联容器
 
-- 需要指定元素类型。
+<!-- - 需要指定元素类型。
 - 列表初始化：
   - `map`：`map<string, int> word_count = {{"a", 1}, {"b", 2}};`
-  - `set`：`set<string> exclude = {"the", "a"};`
+  - `set`：`set<string> exclude = {"the", "a"};` -->
 
 ### 关键字类型的要求
 
