@@ -16,7 +16,7 @@ tags:
 
 ## 第一章 让自己习惯 C++
 
-### 01：试 C++为一个语言联邦
+### 01:试 C++为一个语言联邦
 
 - C。说到底 C++仍是以 C 为基础。==区块、语句、预处理器、内置数据类型、数组、指针==等统统来自 C。许多时候 C++对问题的解法其实不过就是较高级的 C 解法，但当你以 C++ 内的 C 成分工作时，高效编程守则映照出 C 语言的局限:没有模板，没有异常,没有重载……
 - Object-Oriented C++。这部分也就是 C with Classes 所诉求的: classes，==封装、继承、多态、virtual 函数(动态绑定)==……等等。这一部分是面向对象设计之古典守则在 C++上的最直接实施。
@@ -27,7 +27,7 @@ tags:
 C++高效编程守则是状况而变化，取决于你使用 C++的哪个部分。
 :::
 
-### 02: 尽量以 const, enum, inline 替换#define
+### 02::尽量以 const, enum, inline 替换#define
 
 ```cpp
 #define ASPECT RATIO 1.653
@@ -49,8 +49,259 @@ private:
 然而你所看到的是 NumTurns 的`声明式`而非`定义式`。通常 C++要求你对你所使用的任何东西提供一个定义式，但如果它是个 class 专属常量又是 static 且为整数类型(integral type,例如 ints, chars, bools)，则需特殊处理。只要不取它们的地址,你可以声明并使用它们而无须提供定义式。但如果你取某个 class 专属常量的地址,或纵使你不取其地址而你的编译器却（不正确地）坚持要看到一个定义式，你就必须另外提供定义式如下:
 
 ```cpp
-const int GamePlayer : : NumTurns;  //NumTurns的定义;
+const int GamePlayer :: NumTurns;  //NumTurns的定义;
                                     //下面告诉你为什么没有给予数值
 ```
 
 这个式子放进一个实现文件而非头文件。由于 class 常量已在声明时获得初值(例如先前声明 NumTurns 时为它设初值 5)，因此定义时不可以再设初值。
+
+### 03:尽可能使用 const
+
+`const`非常多才多艺。在 `classes`的外部，你可以将它用于`global`（全局）或 `namespace`（命名空间）范围的, 以及那些在 `file`、`function` 或区块作用域内被声明为==`static`的对象==。在 `classes`的内部，你可以将它用于`static`和非静态数据成员上。对于指针，你可以指定这个指针本身是`const`，或者它所指向的数据是`const`，或者两者都是，或者都不是：
+
+```cpp
+char greeting[] = "Hello";
+char *p = greeting; // non-const pointer, non-const data
+const char *p = greeting; // non-const pointer, const data
+char * const p = greeting; // const pointer, non-const data
+const char * const p = greeting; // const pointer, const data
+```
+
+::: warning
+如果 const 出现在星号左边，则指针指向的内容为常量；如果 const 出现在星号右边，则指针自身为常量；如果 const 出现在星号两边，则两者都为 constant（常量）。
+:::
+
+STL 迭代器以指针为原型，所以一个迭代器在行为上非常类似于一个`T* pointer`指针。声明一个迭代器为 const 就类似于声明一个 pointer（指针）为 const（也就是说，声明一个 T* const pointer（指针））：不能将这个迭代器指向另外一件不同的东西，但是它所指向的东西本身可以变化。如果你要一个 iterator 指向一个不能变化的东西（也就是一个 const T* pointer 指针的 STL 对等物），你需要一个 `const_iterator`：
+
+```cpp
+std::vector<int> vec;
+...
+const std::vector<int>::iterator iter =     // iter acts like a T* const
+  vec.begin();
+*iter = 10;                                 // OK, changes what iter points to
+// ++iter;                                     // error! iter is const
+
+std::vector<int>::const_iterator cIter =    // cIter acts like a const T*
+  vec.begin();
+// *cIter = 10;                                // error! *cIter is const
+++cIter;                                    // fine, changes cIter
+```
+
+一个函数返回一个常量值，常常可以在不放弃安全和效率的前提下尽可能减少客户的错误造成的影响。一个好的用户自定义类型的特点就是要避免与 built-ins（内建类型）毫无理由的不和谐。==将 operator\* 的返回值声明为 const 就可以避免这一点==，这就是我们要这样做的理由。
+
+#### const 成员函数
+
+::: tip
+成员函数在只有常量性不同时是可以被重载的。
+:::
+
+```cpp
+class TextBlock {
+public:
+  ...
+  const char& operator[](std::size_t position) const   // operator[] for const objects
+  { return text[position]; }                           // CTextBlock
+
+  char& operator[](std::size_t position)               // operator[] for non-const objects
+  { return text[position]; }                           // TextBlock
+
+private:
+   std::string text;
+};
+```
+
+::: warning
+non-const 版本的 operator[] 的返回类型是 `reference to a char` 而不是一个 `char` 本身。如果 operator[] 只是返回一个简单的 char，下面的语句将无法编译：`tb[0] = 'x';`因为==改变一个返回内建类的函数的返回值总是非法的==。即使它合法，C++ returns objects by value（以传值方式返回对象）这一事实也意味着被改变的是 tb.text[0] 的==一个拷贝==，而不是 tb.text[0] 自己，这不会是你想要的行为。
+:::
+::: note
+改变一个返回内建类的函数的返回值总是非法如何理解：
+
+```cpp
+int getValue() {
+    return 42; // 返回一个整数
+}
+
+int main() {
+    getValue() = 100; // ❌ 非法！编译错误：lvalue required as left operand of assignment
+    // 尝试改变函数返回的整数值 42，这是绝对不允许的。
+
+    return 0;
+}
+```
+
+内置类型的函数返回值是纯右值，不是左值，不能被赋值
+:::
+
+#### 避免 const 和 non-const 成员函数的重复
+
+如果说 const 版本的 operator[] 所做的事也正是 non-const 版本所做的，仅有的不同是它有一个被 const 修饰的返回类型，==让 non-const operator[] 调用 const 版本也是避免重复代码的安全方法==。
+
+```cpp
+class TextBlock {
+public:
+
+  ...
+
+  const char& operator[](std::size_t position) const     // same as before
+  {
+
+    ...
+    return text[position];
+  }
+
+  char& operator[](std::size_t position) // 1. 这个函数返回一个可修改的char引用
+  {
+    return // 2. 整个函数的返回值就是后面的结果
+      const_cast<char&>( // 4. 最后一步：去掉const属性，匹配函数返回类型
+        static_cast<const TextBlock&>(*this) // 3a. 第一步：为*this加上const
+          [position] // 3b. 第二步：调用const版本的operator[]
+    );
+    // // 1. 将当前对象（*this）转换为一个const引用
+    // //    这确保了下一步调用的是 const版本的 operator[]，而不是自己（非const版本），避免了递归调用。
+    // const TextBlock& constThis = *this;
+
+    // // 2. 调用const版本的operator[]，它返回一个 const char&
+    // const char& constCharRef = constThis[position];
+
+    // // 3. 使用const_cast去掉返回的引用上的const属性，使其变为 char&
+    // char& charRef = const_cast<char&>(constCharRef);
+
+    // // 4. 返回这个可修改的引用
+    // return charRef;
+
+  }
+
+...
+
+};
+```
+
+::: warning
+为什么不能反过来（const 版本调用非 const 版本）
+
+因为非 const 的 operator[] ==可能会修改对象的状态（这是它的权利）==。而 const 版本的函数向编译器和使用者做出了一个庄严的承诺：“我绝不会修改这个对象的状态”。你通过 const_cast 去掉 const 并调用一个可能修改对象的函数，直接违背了这个承诺，会导致未定义行为。
+:::
+
+::: important
+
+- 将某些东西声明为 const 可帮助编译器侦测出错误用法。const 可被施加于任何作用域内的对象、函数参数、函数返回类型、成员函数本体。
+- 编译器强制实施 bitwise constness,但你编写程序时应该使用“概念上的常量性(conceptual constness)。
+- 当 const 和 non-const 成员函数有着实质等价的实现时，令 non-const 版本调用 const 版本可避免代码重复。
+  :::
+
+### 04:确保对象在使用前被初始化
+
+```cpp
+class ABEntry {                         // ABEntry = "Address Book Entry"
+
+public:
+
+  ABEntry(const std::string& name, const std::string& address);
+
+private:
+
+  std::string theName;
+  std::string theAddress;
+  int num TimesConsulted;
+
+};
+
+ABEntry::ABEntry(const std::string& name, const std::string& address,)
+{
+
+  theName = name;                       // 这些都是赋值不是初始化
+  theAddress = address;
+  numTimesConsulted = 0;
+
+}
+```
+
+C++ 的规则规定一个==对象的成员变量在进入构造函数的函数体之前被初始化==。在 ABEntry 的构造函数内，theName，theAddress 和 thePhones 不是被初始化，而是被赋值。初始化发生得更早——**在进入 ABEntry 的构造函数的函数体之前**，它们的缺省的构造函数已经被自动调用。但不包括 numTimesConsulted，因为它是一个内置类型。不能保证它在被赋值之前被初始化。
+
+应该写成`ABEntry::ABEntry(const std::string& name, const std::string& address):theName(name), theAddress(address), numTimesConsulted(0){}`
+
+::: note
+C++对“定义于不同的编译单元内的 non-local static 对象”的初始化相对次序并无明确定义。这是有原因的:决定它们的初始化次序相当困难，非常困难，根本无解。==在其最常见形式，也就是多个编译单元内的 non-localstatic 对象经由“模板隐式具现化,implicit template instantiations”形成==(而后者自己可能也是经由“模板隐式具现化”形成)，不但不可能决定正确的初始化次序，甚至往往不值得寻找“可决定正确次序”的特殊情况。
+
+要做的就是将每一个局部静态对象移到它自己的函数中，在那里它被声明为静态，即 Singleton 模式的常用实现手法。
+
+```cpp
+class FileSystem { ... };           //
+
+FileSystem& tfs()                   // 这个函数用来替换tfs对象;
+{                                   // 它在Filesystem class中可能是个static。
+  static FileSystem fs;             // 定义并初始化一个local static对象，
+  return fs;                        // 返回一个reference指向上述对象。
+}
+
+class Directory { ... };            // 同前
+
+Directory::Directory( params )      // 同前，但原本的reference to tfs
+{                                   // 现在改为tfs ()
+  ...
+  std::size_t disks = tfs().numDisks();
+}
+
+Directory& tempDir()                // 这个函数用来替换tempDir对象;
+{                                   // 它在Directory class中可能是个static。
+  static Directory td;              // 定义并初始化 local static对象，
+  return td;                        // 返回一个reference指向上述对象。
+}
+```
+
+:::
+
+::: important
+
+- 手动初始化内置类型的对象，因为 C++ 只在某些时候才会自己初始化它们。
+- 在构造函数中，用成员初始化列表代替函数体中的赋值。初始化列表中数据成的排列顺序要与它们在类中被声明的顺序相同。
+- 通过用局部静态对象代替非局部静态对象来避免跨转换单元的初始化顺序问题。
+  :::
+
+## 第二章 构造/析构/赋值运算
+
+### 05:了解 C++ 为你偷偷地加上和调用了什么函数
+
+如果你打算在一个“内含 reference 成员”的 class 内支持赋值操作 assignment，你必须自己定义 copy assignment 操作符。面对“内含 const 成员”(如本例之 obiectValue)的 classes,编译器的反应也一样。更改 const 成员是不合法的，所以编译器不知道如何在它自已生成的赋值函数内面对它们。最后还有一种情况:如果某个 basecasses 将 coPassignment 操作符声明为 private，编译器将拒绝为其 derived classes 生成一个 copyassignment 操作符。毕竟编译器为 derived classes 所生的 copy assignment 操作符想象中可以处理 base class 成分，但它们当然无法调用 derived class 无权调用的成员函数。编译器两手一摊，无能为力。
+
+- 编译器可以暗自为 class 创建 default 构造函数、copy 构造函数、copyassignment 操作符，以及析构函数。
+
+### 06:如果你不想使用编译器生成函数，就明确拒绝
+
+解决这个问题的关键是所有的编译器生成的函数都是公有的。为了防止生成这些函数，你必须==将拷贝构造函数和拷贝赋值运算符声明为私有的==。通过显式声明一个成员函数，可以防止编译器生成它自己的版本，而且将这个函数声明为私有的，可以防止别人调用它。
+
+```cpp
+class HomeForSale {
+public:
+  ...
+
+private:
+  ...
+  HomeForSale(const HomeForSale&);            // 仅声明即可
+  HomeForSale& operator=(const HomeForSale&);
+};
+```
+
+对于上面的类定义，编译器将阻止客户拷贝对象的企图，如果你不小心在成员或友元函数中这样做了，连接程序会提出抗议（因为没有函数参数的名称）。
+
+::: note
+或者可以将这两个函数==专门放在 Uncopyable 类里面然后其他类来继承他==。如果有人——甚至是成员或友元函数——试图拷贝一个 HomeForSale 对象，编译器将试图生成一个拷贝构造函数和一个拷贝赋值运算符。这些函数的**编译器生成版会试图调用基类的相应函数，而这些调用将被拒绝**，因为在基类中，拷贝操作是私有的。_这个类还会有其他妙用_。
+:::
+
+::: important
+
+- 为了拒绝编译器自动提供的机能，将相应的 member functions（成员函数）声明为 private，而且不要给出 implementations（实现）。使用一个类似 Uncopyable 的 base class（基类）是方法之一。
+  :::
+
+### 07:在多态基类中将析构函数声明为虚拟
+
+虚拟函数的实现要求对象携带额外的信息，这些信息用于在运行时确定该对象应该调用哪一个虚拟函数。典型情况下，这一信息具有一种被称为**vptr**（虚拟函数表指针）的指针的形式。vptr 指向一个被称为 vtbl（虚拟函数表）的函数指针数组，每一个带有虚拟函数的类都有一个相关联的 vtbl。**当在一个对象上调用虚拟函数时，实际的被调用函数通过下面的步骤确定：找到对象的 vptr 指向的 vtbl，然后在 vtbl 中寻找合适的函数指针**。
+
+::: tip
+当且仅当一个类中包含至少一个虚拟函数时，则在类中声明一个虚拟析构函数.
+:::
+
+::: important
+
+- 多态基类应该声明虚拟析构函数。如果一个类有任何虚拟函数，它就应该有一个虚拟析构函）。
+- 不是设计用来作为基类或不是设计用于多态的类就不应该声明虚拟析构函数。
