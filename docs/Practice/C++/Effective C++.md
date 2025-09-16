@@ -391,8 +391,8 @@ private:
 ::: tip
 既然直接调用不行，但如果确实需要在对象初始化时定制行为，解决方法如下：
 
-- 将初始化工作分离：不要在图构造函数中完成所有工作。提供一个像 initialize() 或 init() 的公共函数，在对象完全构造后由使用者调用。
-- 将信息从派生类传递到基类构造函数：这是更优雅、更常用的方法。**让派生类将必要的初始化信息作为参数，通过基类的构造函数传递上去。**
+- _将初始化工作分离_：不要在图构造函数中完成所有工作。提供一个像 initialize() 或 init() 的公共函数，在对象完全构造后由使用者调用。
+- _将信息从派生类传递到基类构造函数_：这是更优雅、更常用的方法。**让派生类将必要的初始化信息作为参数，通过基类的构造函数传递上去。**
 
 ```cpp
 class Base {
@@ -420,3 +420,84 @@ public:
 ::: important
 在构造和析构期间不要调用 virtual 函数，因为这类调用从不下降至 derived class(比起当前执行构造函数和析构函数的那层)。
 :::
+
+### 10:让赋值运算符返回一个 reference to \*this
+
+::: important
+令赋值(assignment)操作符返回一个 reference to \*this。
+:::
+
+### 11:在 operator=中处理“自我赋值”
+
+见“面向对象高级开发 1”中“对于拷贝赋值函数”处：
+
+```cpp
+String& String::operator=(const String& str)
+{
+   if (this == &str) //如果没有这一步，在进行c1 = c1的时候，下一步的delete操作会直接把内容清掉，后续操作无法进行，不仅仅是效率问题
+      return *this;
+      ...
+}
+```
+
+::: note
+使异常安全一般也同时弥补了它的自赋值安全。这就导致了更加通用的处理自赋值问题的方法就是忽略它，而将焦点集中于达到 e 异常安全。在本例中，已经足以看出，在很多情况下，仔细地调整一下语句的顺序就可以得到异常安全（同时也是自赋值安全）的代码。(只要注意不要删除 pb，直到我们拷贝了它所指向的目标之后)
+
+```cpp
+Widget& Widget::operator=(const Widget& rhs)
+{
+  Bitmap *pOrig = pb;               // 记住原先的 pb
+  pb = new Bitmap(*rhs.pb);         // m令 pb 指向 *pb 的一个复件
+  delete pOrig;                     // 删除原先的 pb
+
+  return *this;
+}
+```
+
+现在,如果“newBitmap"抛出异常，pb 及其栖身的那个 widget）保持原状。即使没有证同测试( identity test)，这段代码还是能够处理自我赋值，因为我们对原 bitmap 做了一份复件、删除原 bitmap、然后指向新制造的那个复件。它或许不是处理“自我赋值”的最高效办法，但它行得通。
+:::
+::: imtportant
+
+- 确保当对象自我赋值时 operator=有良好行为。其中技术包括比较“来源对象”和“目标对象”的地址、精心周到的语句顺序、以及 copy-and-swap.
+- 确定任何函数如果操作一个以上的对象，而其中多个对象是同一个对象时，其行为仍然正确。
+  :::
+
+### 12:复制对象时勿忘其每一个成分
+
+任何时候只要你承担起“为 derived class 撰写 copying 函数”的重责大任，**必须很小心地也复制其 base class 成分**。那些成分往往是 private(见条款 22)，所以你无法直接访问它们，你应该让 derived class 的 copying 函数调用相应的 base class 函数:
+
+```cpp
+PriorityCustomer::PriorityCustomer(const PriorityCustomer& rhs)
+:    Customer(rhs),                   // 调用base class的拷贝构造函数
+  priority(rhs.priority)
+{
+  logCall("PriorityCustomer copy constructor");
+}
+
+PriorityCustomer&
+PriorityCustomer::operator=(const PriorityCustomer& rhs)
+{
+  logCall("PriorityCustomer copy assignment operator");
+
+  Customer::operator=(rhs);           // 对base class成分进行赋值动作
+  priority = rhs.priority;
+
+  return *this;
+}
+```
+
+==当你写一个拷贝函数，需要保证（1）拷贝所有本地数据成员以及（2）调用所有基类中的适当的拷贝函数==。
+
+::: note
+用拷贝赋值运算符调用拷贝构造函数是没有意义的，因为你这样做就是试图去构造一个已经存在的对象。这太荒谬了，甚至没有一种语法来支持它。有一种语法看起来好像能让你这样做，但实际上你做不到，还有一种语法采用迂回的方法这样做，但它们在某种条件下会对破坏你的对象。所以我不打算给你看任何那样的语法。无条件地接受这个观点：不要用拷贝赋值运算符调用拷贝构造函数。
+
+尝试一下另一种相反的方法——用拷贝构造函数调用拷贝赋值运算符——这同样是荒谬的。一个构造函数初始化新的对象，而一个赋值运算符只能用于已经初始化过的对象。借助构造过程给一个对象赋值将意味着对一个尚未初始化的对象做一些事，而这些事只有用于已初始化对象才有意义。
+
+如果你发现你的拷贝构造函数和拷贝赋值运算符有相似的代码，通过创建第三个供两者调用的成员函数来消除重复。这样的函数当然是 private 的，而且经常叫做 init。这一策略是在拷贝构造函数和拷贝赋值运算符中消除代码重复的安全的，被证实过的方法。
+:::
+
+::: important
+
+- 拷贝函数应该保证拷贝一个对象的所有数据成员以及所有的基类部分。
+- 不要试图依据一个拷贝函数实现另一个。作为代替，将通用功能放入第三个供双方调用的函数。
+  :::
