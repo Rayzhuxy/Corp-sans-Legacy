@@ -303,7 +303,7 @@ private:
 
 ::: important
 
-- 多态基类应该声明虚拟析构函数。如果一个类有任何虚拟函数，它就应该有一个虚拟析构函）。
+- 多态基类应该声明虚拟析构函数。如果一个类有任何虚拟函数，它就应该有一个虚拟析构函数。
 - 不是设计用来作为基类或不是设计用于多态的类就不应该声明虚拟析构函数。
   :::
 
@@ -615,3 +615,112 @@ tr1::shared_ptr 有一个特别好的性质是:==它会自动使用它的“每�
   :::
 
 ### 19:设计 class 犹如设计 type
+
+::: important
+Class 的设计就是 type 的设计。在定义一个新 type 之前，请确定你已经考虑过本条款覆盖的所有讨论主题。
+:::
+
+### 20:宁以 pass-by-reference-to-const 替换 pass-by-value
+
+- 以传引用方式传递参数还可以避免==切断问题==。当一个派生类对象作为一个基类对象被传递（传值方式），基类的拷贝构造函数被调用，而那些使得对象的行为像一个派生类对象的特殊特性被“切断”了。
+
+::: important
+
+- 尽量以 pass-by-reference-to-const 替换 pass-by-value。前者通常比较高效，并可避免切割问题(slicing problem)。
+- 以上规则并不适用于内置类型，以及 STL 的迭代器和函数对象。对它们而言，pass-by-value 往往比较适当。
+  :::
+
+### 21:必须返回对象时，别妄想返回其 reference
+
+当你必须在“返回一个 reference 和返回一个 object”之间抉择时，你的工作就是挑出行为正确的那个。就让编译器厂商为“尽可能降低成本”鞠躬尽瘁吧，你可以享受你的生活。
+::: important
+
+- 绝不要返回 pointer 或 reference 指向一个 local stack 对象，或返回 reference 指向一个 heap-allocated 对象，或返回 pointer 或 reference 指向一个 local static 对象而有可能同时需要多个这样的对象。条款 4 已经为“在单线程环境中合理返回 reference 指向一个 local static 对象”提供了一份设计实例。
+  :::
+
+### 22:将成员变量声明为 private
+
+封装的重要性比你最初见到它时还重要。如果你对客户隐藏成员变量(也就是封装它们)，
+你可以确保 class 的约束条件总是会获得维护，因为**只有成员函数可以影响它们**。犹有进者，你保留了日后变更实现的权利。
+如果你不隐藏它们，你很快会发现,即使拥有 class 原始码，改变任何 public 事物的能力还是极端受到束缚，因为那会破坏太多客户码。
+Public 意味不封装，而几乎可以说，不封装意味不可改变，特别是对被广泛使用的 classes 而言。
+被广泛使用的 classes 是最需要封装的-个族群，因为它们最能够从“改采用一个较佳实现版本”中获益。
+::: important
+
+- 切记将成员变量声明为 private。这可赋予客户访问数据的一致性、可细微划分访问控制、允诺约束条件获得保证，并提供 class 作者以充分的实现弹性。
+- protected 并不比 public 更具封装性。
+  :::
+
+### 23:宁以 non-member、non-friend 替换 member 函数
+
+如果某些东西被封装，它就不再可见。愈多东西被封装，愈少人可以看到它。
+而愈少人看到它，我们就有愈大的弹性去变化它，因为我们的改变仅仅直接影响看到改变的那些人事物。
+因此，愈多东西被封装，我们改变那些东西的能力也就愈大。
+这就是我们首先推崇封装的原因:==它使我们能够改变事物而只影响有限客户==。
+
+::: important
+宁可拿 non-member non-friend 函数替换 member 函数。
+这样做可以增加封装性、包裹弹性（packaging flexibility）和机能扩充性。
+:::
+
+### 24:若所有参数皆需类型转换,请为此采用 non-member 函数
+
+```cpp
+class Rational {
+public:
+  Rational(int numerator = 0,        // 构造函数刻意不为explicit;允许int-to-Rational隐式转换。
+           int denominator = 1);
+
+  int numerator() const;             // 分子(numerator）和分母(denominator)的访问函数(accessors）—见条款22。
+  int denominator() const;
+  const Rational operator*(const Rational& rhs) const;
+
+private:
+  ...
+
+};
+
+...
+
+result = oneHalf * 2;   //正确（oneHalf.operator*(2)）
+result = 2 * oneHalf;   //错误(2.operator*(oneHalf))
+
+```
+
+正确的那一行发生了所谓隐式类型转换。编译器知道你正在传递一个 int，而函数需要的是 Rational;
+但它也知道只要调用 Rational 构造函数并赋予你所提供的 int，就可以变出一个适当的 Rational 来。
+于是它就那样做了。
+
+::: tip
+当然，只因为涉及 non-explicit 构造函数，编译器才会这样做。如果 Rational 构造函数是 explicit，两句话都不能通过！！！
+
+:::
+
+**只有当参数被列于参数列内，这个参数才是隐式类型转换的合格参与者。**
+地位相当于“被调用之成员函数所隶属的那个对象”(即 this 对象)的那个隐喻参数，绝不是隐式转换的合格参与者。
+这就是为什么上述第一次调用可通过编译，第二次调用则否，因为第一次调用伴随一个放在参数列内的参数，第二次调用则否。
+::: important
+如果你需要为某个函数的所有参数（包括被 this 指针所指的那个隐喻参数）进行类型转换，那么这个函数必须是个 non-member。
+:::
+
+### 25:考虑写出一个不抛异常的 swap 数
+
+首先，如果 swap 的缺省实现码对你的 class 或 class template 提供可接受的效率,你不需要额外做任何事。任何尝试置换(swap)那种对象的人都会取得缺省版本，而那将有良好的运作。
+
+其次，如果 swap 缺省实现版的效率不足(那几乎总是意味你的 class 或 template 使用了某种 pimmpl 手法)，试着做以下事情:
+
+- 提供一个 public swap 成员函数,让它高效地置换你的类型的两个对象值。稍后我将解释，这个函数绝不该抛出异常。
+- 在你的 class 或 template 所在的命名空间内提供一个 non-member swap,并令它调用 上述 swap 成员函数。
+- 如果你正编写一个 class(而非 class template)，为你的 cass 特化 stdswap 在你的函数内曝光可见，然后不加任何 namespace 修饰符，赤裸裸地调用 swap。
+
+::: important
+
+- 当 std::swap 对你的类型效率不高时，提供一个 swap 成员函数，并确定这个函数不抛出异常。
+- 如果你提供一个 member swap，也该提供一个 non-member swap 用来调用前者。对于 classes(而非 templates)，也请特化 std::swap。
+- 调用 swap 时应针对 std::swap 使用 using 声明式,然后调用 swap 并且不带任何“命名空间资格修饰”。
+- “用户定义类型”进行 std templates 全特化是好的，但千万不要尝试在 std 内加入某些对 std 而言全新的东西。
+  :::
+
+## 第五章：实现
+
+### 26:尽可能延后变量定义式的出现时间
